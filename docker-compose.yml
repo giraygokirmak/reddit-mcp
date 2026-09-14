@@ -1,0 +1,13 @@
+services:
+  reddit-mcp:
+    build: .
+    container_name: reddit-mcp
+    env_file: .env
+    volumes:
+      # Session volume: put session.json or settings.json in this host folder.
+      # Container reads it from REDDIT_SESSION_DIR.
+      - ${REDDIT_SESSION_HOST_DIR:-./session}:/data
+    ports:
+      - "${REDDIT_MCP_PORT:-8000}:${REDDIT_MCP_PORT:-8000}"
+    entrypoint: /app/docker/entrypoint.sh
+    restart: unless-stopped

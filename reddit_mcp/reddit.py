@@ -21,6 +21,7 @@ import requests
 # Session file location (configurable via env)
 SESSION_DIR = Path(os.environ.get("REDDIT_SESSION_DIR", Path.home() / ".config" / "reddit-mcp"))
 SESSION_FILE = SESSION_DIR / "session.json"
+SETTINGS_FILE = SESSION_DIR / "settings.json"
 
 # Reddit URLs
 BASE_URL = "https://old.reddit.com"
@@ -50,18 +51,23 @@ def save_session(cookies: dict, username: str, browser: str | None = None):
 
 
 def load_session() -> Optional[dict]:
-    """Load session from disk if it exists."""
-    if not SESSION_FILE.exists():
-        return None
+    """Load session from disk if it exists.
 
-    try:
-        data = json.loads(SESSION_FILE.read_text())
-        # Check required fields exist
-        if "cookies" not in data or "username" not in data:
-            return None
-        return data
-    except (json.JSONDecodeError, KeyError):
-        return None
+    Looks for session.json first, then settings.json (container/volume mount
+    convention): drop either file into REDDIT_SESSION_DIR and it is used.
+    """
+    for path in (SESSION_FILE, SETTINGS_FILE):
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text())
+            # Check required fields exist
+            if "cookies" not in data or "username" not in data:
+                continue
+            return data
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return None
 
 
 class RedditClient:

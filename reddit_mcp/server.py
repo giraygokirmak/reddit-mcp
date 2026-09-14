@@ -6,6 +6,7 @@ Copyright (C) 2026 Iris Thomas. Released under the Unlicense.
 
 import json
 import logging
+import os
 from typing import Any
 
 from mcp.server import Server
@@ -20,6 +21,17 @@ logger = logging.getLogger("reddit-mcp")
 # Initialize server and client
 server = Server("reddit-mcp")
 client = RedditClient()
+
+# Transport configuration (env):
+#   REDDIT_MCP_TRANSPORT = stdio (default) | streamable-http
+#   REDDIT_MCP_HOST      = bind address for streamable-http (default 0.0.0.0)
+#   REDDIT_MCP_PORT      = bind port for streamable-http (default 8000)
+#   REDDIT_MCP_NO_DNS_PROTECTION = 1 disables MCP 1.x DNS-rebinding protection
+#                          (needed when the container is reached via a LAN IP,
+#                          otherwise every non-localhost Host header gets 421)
+REDDIT_MCP_TRANSPORT = os.environ.get("REDDIT_MCP_TRANSPORT", "stdio")
+REDDIT_MCP_HOST = os.environ.get("REDDIT_MCP_HOST", "0.0.0.0")
+REDDIT_MCP_PORT = int(os.environ.get("REDDIT_MCP_PORT", "8000"))
 
 
 @server.list_tools()
@@ -289,15 +301,108 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
 
 async def _run():
-    """Run the MCP server (async)."""
+    """Run the MCP server over stdio (default, local Claude/Codex use)."""
     async with stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
+
+
+async def _run_http():
+    """Run the MCP server over streamable-http (standalone container mode)."""
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+    from starlette.middleware import Middleware
+    from starlette.middleware.cors import CORSMiddleware
+    import uvicorn
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+
+    # MCP 1.x DNS-rebinding / Host-header protection: by default the transport
+    # only accepts localhost Host headers and answers anything else with
+    # "421 Misdirected Request". In container/LAN deployments the client
+    # reaches the server via the container or LAN IP, so we explicitly allow
+    # non-localhost hosts unless REDDIT_MCP_NO_DNS_PROTECTION=0 is set.
+    # This mirrors the fonlar-mcp container (pattern A: read/public-data MCP).
+    security_settings = None
+    if os.environ.get("REDDIT_MCP_NO_DNS_PROTECTION", "1") != "0":
+        from mcp.server.transport_security import TransportSecuritySettings
+        security_settings = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        )
+        logger.info("DNS rebinding protection disabled for streamable-http")
+
+    session_manager = StreamableHTTPSessionManager(
+        app=server,
+        event_store=None,
+        json_response=False,
+        stateless=True,
+        security_settings=security_settings,
+    )
+
+    async def handle_streamable_http(scope, receive, send):
+        await session_manager.handle_request(scope, receive, send)
+
+    class _MCPAsgiApp:
+        """ASGI wrapper so Starlette dispatches without the request_response shim."""
+
+        async def __call__(self, scope, receive, send):
+            await session_manager.handle_request(scope, receive, send)
+
+    _mcp_app = _MCPAsgiApp()
+
+    middleware = [
+        Middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+            allow_headers=["*"],
+            expose_headers=["mcp-session-id"],
+        )
+    ]
+
+    from starlette.routing import Route
+
+    app = Starlette(
+        debug=False,
+        routes=[
+            # Exact path, no redirect: registry URL is http://<ip>:<port>/mcp
+            Route("/mcp", endpoint=_mcp_app, methods=["GET", "POST", "DELETE"]),
+            Route("/mcp/", endpoint=_mcp_app, methods=["GET", "POST", "DELETE"]),
+        ],
+        middleware=middleware,
+        lifespan=None,
+    )
+
+    # Enter the session manager context manually so background task group stays up.
+    import contextlib
+    stack = contextlib.AsyncExitStack()
+    await stack.enter_async_context(session_manager.run())
+
+    config = uvicorn.Config(
+        app,
+        host=REDDIT_MCP_HOST,
+        port=REDDIT_MCP_PORT,
+        log_level="info",
+    )
+    http_server = uvicorn.Server(config)
+    try:
+        await http_server.serve()
+    finally:
+        await stack.aclose()
 
 
 def main():
     """Entry point for the MCP server."""
     import asyncio
-    asyncio.run(_run())
+
+    if REDDIT_MCP_TRANSPORT == "streamable-http":
+        logger.info(
+            "Starting streamable-http on %s:%s/mcp (session dir: %s)",
+            REDDIT_MCP_HOST,
+            REDDIT_MCP_PORT,
+            os.environ.get("REDDIT_SESSION_DIR", "~/.config/reddit-mcp"),
+        )
+        asyncio.run(_run_http())
+    else:
+        asyncio.run(_run())
 
 
 if __name__ == "__main__":

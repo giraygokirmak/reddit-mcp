@@ -9,3 +9,6 @@ build/
 .env
 credentials.json
 session.json
+
+settings.json
+session/
