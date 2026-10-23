@@ -12,43 +12,30 @@
 
 ## Kimlik / Session
 
-Reddit tarafı kimlik bilgisini **session dosyasından** okur (API key yok,
-cookie tabanlı). Container'a bir volume mount edilir ve `.env` içindeki
+Reddit tarafı kimlik bilgisini **environment değişkenlerinden** okur (API key
+yok, cookie tabanlı). İmaja hiçbir session dosyası gömülmez ya da volume
+mount edilmez; docker compose `.env` içindeki iki değişkeni container'a
+geçirir:
 
 ```
-REDDIT_SESSION_DIR=/data
+REDDIT_SESSION_COOKIE=<reddit_session cookie değeri>
+REDDIT_USERNAME=<reddit_kullanici_adi>
 ```
 
-değişkeni bu mount noktasını gösterir. Server başlarken bu klasörde önce
-`session.json`, bulunamazsa `settings.json` aranır — ikisinin de içerik
-formatı aynıdır:
+Cookie'yi almak için: tarayıcıda Reddit'e giriş yap → DevTools (F12) →
+Application → Cookies → reddit.com → `reddit_session` değerini kopyala.
+Alternatif olarak host üzerinde `reddit auth` çalıştırıp üretilen
+`session.json` içinden bu iki değeri okuyabilirsin.
 
-```json
-{
-  "cookies": { "reddit_session": "...", "...": "..." },
-  "username": "<reddit_kullanici_adi>",
-  "saved_at": 0,
-  "browser": "firefox"   // opsiyonel
-}
-```
-
-Dosyayı host tarafında oluşturmak için (tarayıcıdan import):
-
-```bash
-# host üzerinde, session klasörüne:
-reddit auth                  # tarayıcıdan cookie import eder, session.json yazar
-# veya mevcut bir dosyayı kopyala:
-cp /path/to/session.json ./session/session.json
-```
-
-`settings.json` adıyla vermek istersen aynı içerikle
-`./session/settings.json` kullan.
+Not: Container dışında (stdio / yerel kullanım) dosya tabanlı okuma hâlâ
+desteklenir — env var tanımlı değilse `REDDIT_SESSION_DIR` altında
+`session.json`, sonra `settings.json` aranır.
 
 ## Hızlı başlangıç
 
 ```bash
 cp .env.example .env
-# .env içinde REDDIT_SESSION_HOST_DIR'i session dosyasının olduğu klasöre ayarla
+# .env içinde REDDIT_SESSION_COOKIE ve REDDIT_USERNAME'i doldur
 docker compose up -d --build
 ```
 

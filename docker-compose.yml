@@ -3,10 +3,12 @@ services:
     build: .
     container_name: reddit-mcp
     env_file: .env
-    volumes:
-      # Session volume: put session.json or settings.json in this host folder.
-      # Container reads it from REDDIT_SESSION_DIR.
-      - ${REDDIT_SESSION_HOST_DIR:-./session}:/data
+    environment:
+      # Reddit auth comes from env vars (set in .env) - no session file
+      # is baked into the image or mounted anymore.
+      REDDIT_SESSION_COOKIE: ${REDDIT_SESSION_COOKIE:?Set REDDIT_SESSION_COOKIE in .env}
+      REDDIT_USERNAME: ${REDDIT_USERNAME:?Set REDDIT_USERNAME in .env}
+      REDDIT_MCP_PORT: ${REDDIT_MCP_PORT:-8000}
     ports:
       - "${REDDIT_MCP_PORT:-8000}:${REDDIT_MCP_PORT:-8000}"
     entrypoint: /app/docker/entrypoint.sh

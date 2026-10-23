@@ -1,0 +1,6 @@
+.env
+session/
+session.json
+settings.json
+.git/
+__pycache__/

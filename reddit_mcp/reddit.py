@@ -23,6 +23,12 @@ SESSION_DIR = Path(os.environ.get("REDDIT_SESSION_DIR", Path.home() / ".config" 
 SESSION_FILE = SESSION_DIR / "session.json"
 SETTINGS_FILE = SESSION_DIR / "settings.json"
 
+# Reddit auth can also be provided via environment variables
+# (REDDIT_SESSION_COOKIE / REDDIT_USERNAME). Docker deployments pass these
+# through docker compose env_file instead of mounting a session file.
+ENV_SESSION_COOKIE = os.environ.get("REDDIT_SESSION_COOKIE", "").strip()
+ENV_USERNAME = os.environ.get("REDDIT_USERNAME", "").strip()
+
 # Reddit URLs
 BASE_URL = "https://old.reddit.com"
 
@@ -51,11 +57,20 @@ def save_session(cookies: dict, username: str, browser: str | None = None):
 
 
 def load_session() -> Optional[dict]:
-    """Load session from disk if it exists.
+    """Load Reddit auth, environment variables first.
 
-    Looks for session.json first, then settings.json (container/volume mount
-    convention): drop either file into REDDIT_SESSION_DIR and it is used.
+    Order of precedence:
+    1. REDDIT_SESSION_COOKIE + REDDIT_USERNAME env vars (no file needed;
+       used by the Docker image - compose passes them via env_file/.env)
+    2. session.json in REDDIT_SESSION_DIR
+    3. settings.json in REDDIT_SESSION_DIR (volume mount convention)
     """
+    if ENV_SESSION_COOKIE and ENV_USERNAME:
+        return {
+            "cookies": {"reddit_session": ENV_SESSION_COOKIE},
+            "username": ENV_USERNAME,
+        }
+
     for path in (SESSION_FILE, SETTINGS_FILE):
         if not path.exists():
             continue

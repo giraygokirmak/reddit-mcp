@@ -395,10 +395,11 @@ def main():
 
     if REDDIT_MCP_TRANSPORT == "streamable-http":
         logger.info(
-            "Starting streamable-http on %s:%s/mcp (session dir: %s)",
+            "Starting streamable-http on %s:%s/mcp (auth source: %s)",
             REDDIT_MCP_HOST,
             REDDIT_MCP_PORT,
-            os.environ.get("REDDIT_SESSION_DIR", "~/.config/reddit-mcp"),
+            "env" if os.environ.get("REDDIT_SESSION_COOKIE")
+            else os.environ.get("REDDIT_SESSION_DIR", "~/.config/reddit-mcp"),
         )
         asyncio.run(_run_http())
     else:

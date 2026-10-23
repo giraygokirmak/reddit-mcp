@@ -120,9 +120,9 @@ If auto-import doesn't work:
 
 **Note:** Manual setup doesn't support auto-refresh. When your cookie expires, you'll need to repeat these steps. Use `reddit auth` if you want automatic refresh.
 
-#### (Optional) Override the Session Location
+#### (Optional) Environment Variables Instead of a File
 
-By default, the session is stored in `~/.config/reddit-mcp/`. You can override this in your MCP config if you want Claude to use a different Reddit account than your CLI default, or if you're running multiple instances with different accounts:
+Instead of a session file, you can pass auth directly via environment variables (this is how the Docker deployment works):
 
 ```json
 {
@@ -130,16 +130,19 @@ By default, the session is stored in `~/.config/reddit-mcp/`. You can override t
     "reddit": {
       "command": "reddit-mcp",
       "env": {
-        "REDDIT_SESSION_DIR": "/path/to/session/directory"
+        "REDDIT_SESSION_COOKIE": "eyJhbGciOiJS...",
+        "REDDIT_USERNAME": "your_reddit_username"
       }
     }
   }
 }
 ```
 
+Environment variables take precedence over the session file. Alternatively, override `REDDIT_SESSION_DIR` to point at a different directory containing `session.json`.
+
 ### How Write Mode Works
 
-1. Write operations load the session cookie from `~/.config/reddit-mcp/session.json`
+1. Write operations load the session cookie from `REDDIT_SESSION_COOKIE`/`REDDIT_USERNAME` env vars, or from `~/.config/reddit-mcp/session.json`
 2. The cookie is used to authenticate with `old.reddit.com`
 3. When the cookie expires, reddit-mcp automatically re-imports from the same browser
 
