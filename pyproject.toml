@@ -24,6 +24,7 @@ requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.26.0,<2",
     "requests>=2.28.0",
+    "curl_cffi>=0.16",
     "browser_cookie3>=0.19.0",
     "uvicorn>=0.30",
     "starlette>=0.37",

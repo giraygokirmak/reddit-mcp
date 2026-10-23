@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
-import requests
+# curl_cffi impersonates Chrome's TLS fingerprint. Plain `requests` gets
+# flagged by Reddit's network security (403 "blocked by network security")
+# regardless of IP address; spoofing Chrome's ClientHello bypasses this.
+from curl_cffi import requests
 
 # Session file location (configurable via env)
 SESSION_DIR = Path(os.environ.get("REDDIT_SESSION_DIR", Path.home() / ".config" / "reddit-mcp"))
@@ -89,7 +92,7 @@ class RedditClient:
     """Reddit client for both reading and writing."""
 
     def __init__(self):
-        self.session = requests.Session()
+        self.session = requests.Session(impersonate="chrome120")
         self.session.headers.update(HEADERS)
         self.modhash: Optional[str] = None
         self.username: Optional[str] = None
@@ -876,7 +879,7 @@ def _try_extract_session(cj) -> Optional[dict]:
         return None
 
     # Got a session cookie - verify it works
-    session = requests.Session()
+    session = requests.Session(impersonate="chrome120")
     session.headers.update(HEADERS)
     session.cookies.set('reddit_session', cookies['reddit_session'], domain='.reddit.com')
 
